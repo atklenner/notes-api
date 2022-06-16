@@ -13,11 +13,13 @@ const requestLogger = (req, res, next) => {
   next();
 };
 
-const errorHandler = (error, res, req, next) => {
+const errorHandler = (error, req, res, next) => {
   console.error(error.message);
-
+  console.log(error.name);
   if ((error.name = "CastError")) {
-    return res.status(400).send({ error: "malformed id" });
+    return res.status(400).send({ error: error.message });
+  } else if (error.name === "ValidationError") {
+    return res.status(400).json({ error: error.message });
   }
 
   next(error);
@@ -51,30 +53,29 @@ app.get("/api/notes/:id", async (req, res, next) => {
   }
 });
 
-app.post("/api/notes", (req, res) => {
+app.post("/api/notes", (req, res, next) => {
   const body = req.body;
-  if (!body.content) {
-    return res.status(400).json({ error: "content missing" });
-  }
   const note = new Note({
     content: body.content,
     important: body.important || false,
     date: new Date(),
   });
-  note.save().then((savedNote) => {
-    res.json(savedNote);
-  });
+  note
+    .save()
+    .then((savedNote) => {
+      res.json(savedNote);
+    })
+    .catch((error) => next(error));
 });
 
 app.put("/api/notes/:id", (request, response, next) => {
-  const body = request.body;
+  const { content, important } = request.body;
 
-  const note = {
-    content: body.content,
-    important: body.important,
-  };
-
-  Note.findByIdAndUpdate(request.params.id, note, { new: true })
+  Note.findByIdAndUpdate(
+    request.params.id,
+    { content, important },
+    { new: true, runValidators: true, context: "query" }
+  )
     .then((updatedNote) => {
       response.json(updatedNote);
     })
